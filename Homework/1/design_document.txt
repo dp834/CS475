@@ -1,0 +1,167 @@
+Parts of the system:
+    skey_gen     - generates a list of hashes for the user
+    skey_manager - stores hashes and gives them to user in the correct order
+    skey_auth    - authenticates a user
+
+skey_gen:
+    Usage:
+        ./skey_gen <initial secret> [iterations]
+
+        initial secret - The inital seed for the list of hashes.
+        iterations     - How many hashes should be in the list, default is 20
+
+    Result:
+        Prints a list of hashes to stdout in the order they are to be used (top of list is first)
+
+skey_manager:
+    Usage:
+        ./skey_manager [store]
+
+        store - if store is 1 then a hash list is read and stored from stdin
+
+    Result:
+        If store is set then the program reads a list of hashes from stdin and stores them in a file '.hashes_list'
+        If store is not set then the program will print the first hash from the stored hash list, before removing it from
+        the list it confirms with the user that the password was used. Also tells the user how many hashes are left in the list.
+
+skey_auth:
+    Usage:
+        ./skey_auth <user> <key> [set]
+
+        user - some identification of the user trying to authenticate
+        key  - the hash the user is trying to authenticate with
+        set  - if set to 1 then the hash is set as the last used hash for that user
+
+    Result:
+        If set is set to 1 then the key passed will be saved as the user's last used hash in a file '.<user>_hash'
+            return 0 if no error
+            return nonzero if error
+        If set is not 1 then the program will attempt to login the user using the key provided. If the key hashes to the
+        stored hash then the user is authenticated and the stored has for the user is updated to contain the new hash
+            return 0 if authenticated (also prints message)
+            return nonzero not-authenticated (also prints message)
+
+
+Hash method used:
+I am using the builtin c++ hash method that converts a String object to a size_t object and truncating it to be a uint32_t.
+The generated number is then printed in hex for the user's convenience to keep it short. To generate the next hash the truncated number
+is taken as a String and the process is repeated.
+
+Originally I picked the hash to go from size_t -> size_t, but the builtin hash was actually the identity since it guarentees no collisions.
+While this hash is probably not cryptographically secure it should serve its purpose for what I'm asking for from this program as I won't be using this to store anything secure.
+If I were to use this to authenticate I would use a know cryptographic hash library.
+
+Using the system:
+The user creates a hash list and stores the list as they want, if they want to use the skey_manager provided here they can use this command
+    ./skey_gen <inital secret> [iterations] | ./skey_manager 1
+this will store the hash list wherever the user is currently located.
+To get the authentication side setup the skey_auth program needs to be placed on the remote machine and initialized for the user.
+The user must get the top password from the hash list:
+    ./skey_manager
+If you are using the skey_manager then you should confirm that the password was used after authentication setup is complete.
+To set the user's initial hash run
+    ./skey_auth <user> <hash> 1
+If the program returns a 0 then it successfully stored the user's hash.
+(Note: the hash is stored in the same folder as CWD when running skey_auth)
+If you are using the skey_manager you can now confirm that the hash was used so it's thrown off the list and will properly return the next hash when asked.
+
+
+If you want to implement this in the login process then you can add a few lines in your .profile
+
+    echo "Please enter the next hash:";
+    read line;
+    ./skey_auth ${USER} ${line} || logout;
+
+This can be modified to allow for multiple attempts but the framework is there.
+
+Possible issues:
+If the authentication side reboots:
+There should be no issues as the user's last used hashes are all stored in text files
+
+Someone can modify the generated files:
+This can be mitigated if the program is placed in a folder that is write only by the owner or update the program to create files that are only writable as the owner of the file.
+
+If the user doesn't generate a new list of hashes before they logout after using the last hash:
+Then the user would need to find a secret that hashes to their inital hash.
+This is up to the user to remember to create a new list and reinitialize the authentication side with the new list.
+If they are using the manager then they will get a message after each use how many passwords are remaining.
+
+
+Test plan:
+    skey_gen
+        ./skey_gen <secret>
+        should return 20 items
+        should generate the same list given the same initial secret
+        the secret should be the final entry
+
+        ./skey_gen <secret> 100
+        should return 100 items
+        should generate the same inital list as for 20
+
+    skey_manager
+        ./skey_manager 1
+        should read from stdin and store contents into '.hashes_list' file
+        should replace any contents that was previously in the file or create it if it doesn't exist
+
+        ./skey_gen <secret> [iterations] | ./skey_manager 1
+        should take the hash list genereated and store it into '.hashes_list'
+
+        ./skey_manager
+        if the '.hashes_list' file doesn't exist it should print and error message
+        print the first hash in the file
+        inform user about how many hashes are left in the file
+        get user confirmation that the hash was used before removing it from the file
+
+
+    skey_auth
+        ./skey_auth <user> <key> 1
+        should generate a file called '.<user>_hash' that only contains <key>
+        if it exists already it should overwrite it
+
+        ./skey_auth <non-user> <key>
+        authentication should fail
+        return 1
+
+        ./skey_auth <user> <incorrect key>
+        authentication should fail
+        return 1
+
+        ./skey_auth <user> <correct key>
+        authentication should pass
+        return 0
+
+
+actual test
+
+./skey_gen SUPERsEcretkeY
+./skey_gen SUPERsEcretkeY 100
+Compare the outputs
+rm .hash_list
+./skey_gen
+./skey_gen SUPERsEcretkeY | ./skey_manager 1
+./skey_gen SUPERsEcretkeY 100 | ./skey_manager 1
+(confirm files created and has 100 lines)
+
+./skey_manager
+(confirm password works and that 99 hashes remain)
+
+rm .*_hash
+
+./skey_auth dmp394 <hash from ./skey_manager> 1
+(confirm files created)
+
+./skey_manager
+(say password doesn't work, check top hash is untouched)
+
+./skey_auth dmp394 <top hash>
+(returns 0)
+
+./skey_manager
+(confirm should say 98 hashes remain)
+
+./skey_auth dmp394 <reuse last hash>
+(should return 1)
+
+./skey_auth new_user asdf
+(should return 1)
+
