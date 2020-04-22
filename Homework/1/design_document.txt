@@ -1,3 +1,11 @@
+Building the system:
+
+mkdir build
+cd build
+cmake ..
+cmake --build .
+
+
 Parts of the system:
     skey_gen     - generates a list of hashes for the user
     skey_manager - stores hashes and gives them to user in the correct order
