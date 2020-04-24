@@ -1,0 +1,25 @@
+For this assignment, you will write a program to implement a crypto machine similar to the Enigma, but with a number of major differences.
+The first difference is that your machine will work with letters and digits.
+Thus you'll be living in a mod 36 world, rather than a mod 26 world.
+The second major difference is that you will only have three wheels that are always in the same order in the machine.
+Third, instead of a plugboard that swaps characters, there will be a permutator that will provide transposition.
+Input is processed 10 characters at a time.
+During encryption, the permutation is applied before the wheels, and on decryption the permutation is reversed after the wheels.
+The permutator is configured by a string of 10 digits where each digit appears exactly once.
+So if the configuration is 3145926870 and a block of 10 input characters is ABCDEFGHIJ, then the characters are processed by the wheels in the order DBEFJCGIHA.
+Fourth, there is no reflector.
+The output of the left wheel is the output of the substitution stage  The final difference relates to the rotation of the wheels.
+Instead of rotating like an odometer, the right-most wheel rotates one position for each character typed, the left-most wheel rotates one position for each five characters typed, and the middle wheel rotates one position for each seven characters typed.
+
+The following table shows the wiring of the wheels in the right-to-left direction:
+  	    A 	B 	C 	D 	E 	F 	G 	H 	I 	J 	K 	L 	M 	N 	O 	P 	Q 	R 	S 	T 	U 	V 	W 	X 	Y 	Z 	0 	1 	2 	3 	4 	5 	6 	7 	8 	9
+left 	2 	y 	z 	0 	1 	a 	w 	i 	p 	k 	s 	n 	3 	t 	e 	r 	m 	u 	c 	5 	v 	6 	x 	7 	f 	q 	o 	l 	4 	8 	g 	d 	9 	b 	j 	h
+middle 	0 	l 	x 	1 	2 	8 	h 	b 	3 	n 	r 	o 	k 	d 	t 	7 	c 	6 	p 	i 	v 	j 	4 	a 	u 	w 	m 	e 	9 	5 	q 	s 	z 	g 	y 	f
+right 	3 	5 	h 	e 	f 	g 	d 	q 	8 	m 	2 	k 	l 	j 	n 	s 	u 	w 	o 	v 	r 	x 	z 	c 	i 	9 	t 	7 	b 	p 	a 	0 	1 	y 	6 	4
+
+The full key for your machine will consist of a 10-character string and a 3-character string.
+Your machine will need to have separate encryption and decryption modes (or separate programs) that use the wheels and permutator differently.
+Your first stage of testing will be to determine if you can decrypt messages you encrypt.
+Your second stage of testing will be to exchange messages with another class member and verify that you can each decrypt the messages the other encrypts.
+Your documentation should explain how to use your implementation, your testing plan and results, and some discussion regarding how this machine compares to the Enigma in terms of the number of possible keys and the susceptibility to breaking using a Bombe-like approach.
+
