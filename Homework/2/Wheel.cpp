@@ -12,7 +12,8 @@ Wheel::Wheel(std::string &mapping, int period, char initial_view, std::map<char,
         wiring.push_back(char_map[c]);
     }
 
-    current_offset = find(wiring.begin(), wiring.end(), initial_view) - wiring.begin();
+    current_offset = find(wiring.begin(), wiring.end(), char_map[initial_view]) - wiring.begin();
+
 }
 
 
@@ -27,7 +28,8 @@ char Wheel::encode(char c)
         rotate_counter = 0;
     }
     int index = (char_map[c] + current_offset) % wheel_length;
-    return reverse_char_map[wiring[index]];
+    index = (wiring[index] - current_offset + wheel_length) % wheel_length;
+    return reverse_char_map[index];
 }
 
 char Wheel::decode(char c)
@@ -40,7 +42,7 @@ char Wheel::decode(char c)
         current_offset = (current_offset + 1) % wheel_length;
         rotate_counter = 0;
     }
-    int index = find(wiring.begin(), wiring.end(), char_map[c]) - wiring.begin();
+    int index = find(wiring.begin(), wiring.end(), (char_map[c] + current_offset) % wheel_length) - wiring.begin();
     // Make sure we are in range, and modulus of negative is not well defined in c++
     index = (index - current_offset + wheel_length) % wheel_length;
     return reverse_char_map[index % wheel_length];
