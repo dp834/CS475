@@ -1,3 +1,6 @@
+#ifndef PERMUTER_H
+#define PERMUTER_H
+
 #include <vector>
 #include <string>
 
@@ -16,3 +19,5 @@ public:
     std::string unpermute(std::string input);
     ~Permuter();
 };
+
+#endif

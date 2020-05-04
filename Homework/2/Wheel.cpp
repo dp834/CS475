@@ -12,8 +12,7 @@ Wheel::Wheel(std::string &mapping, int period, char initial_view, std::map<char,
         wiring.push_back(char_map[c]);
     }
 
-    current_offset = find(wiring.begin(), wiring.end(), char_map[initial_view]) - wiring.begin();
-
+    reset(initial_view);
 }
 
 
@@ -63,4 +62,9 @@ std::string Wheel::decode(std::string str)
         out += decode(c);
     }
     return out;
+}
+
+void Wheel::reset(char c){
+    current_offset = char_map[c];
+    rotate_counter = 0;
 }

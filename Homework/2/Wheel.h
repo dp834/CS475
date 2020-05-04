@@ -1,3 +1,6 @@
+#ifndef WHEEL_H
+#define WHEEL_H
+
 #include <vector>
 #include <map>
 #include <string>
@@ -20,4 +23,7 @@ public:
     char decode(char c);
     std::string encode(std::string str);
     std::string decode(std::string str);
+    void reset(char c);
 };
+
+#endif
