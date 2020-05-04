@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     if(argc != 4 && argc != 5){
         return usage(argv[0]);
     }
-    
+
     if(argv[1][0] == 'e'){
         encrypt = true;
     }else if(argv[1][0] == 'd'){
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
         if(c == '\0'){
             return usage(argv[0]);
         }
-        
+
         /* Check that it's a valid character and
          * convert lowercase to uppercase */
 
@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
         input = &std::cin;
     }else{
         /* open file */
-        file.open(argv[4], std::ifstream::in); 
+        file.open(argv[4], std::ifstream::in);
         if(!file.good()){
             std::cerr << "Failed to open file " << argv[4] << std::endl;
             return -1;

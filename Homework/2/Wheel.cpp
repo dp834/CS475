@@ -1,5 +1,5 @@
 #include "Wheel.h"
-#include <bits/stdc++.h> 
+#include <bits/stdc++.h>
 
 /* mapping and map should have the same size */
 Wheel::Wheel(std::string &mapping, int period, char initial_view, std::map<char,int> &map, std::map<int,char> &reverse_map) :
