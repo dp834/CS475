@@ -1,0 +1,87 @@
+Building the system:
+
+mkdir build
+cd build
+cmake ..
+cmake --build .
+
+
+Parts of the system:
+    Permuter    - Performs the permutation operation
+    Wheel       - Acts as a wheel by performing the wiring and rotations
+    Driver      - Combines the Permuter, Wheels and gets input from user
+
+Driver:
+    Usage:
+        ./machine (e[ncrypt]|d[ecrypt]) <permutation> <window> [filename]
+            permutation   - list of integers from 0-9 appearing once ie. 3145926870 or 0123456789
+            window        - list of 3 characters representing the initial offset of the left middle and right wheel respectively
+            filename      - will read text to encrypt/decrypt from file, if none is specified then use stdin
+            Note          - The message must contain all UPPERCASE letters
+
+    Result:
+        If the 'e' flag is passed the message passed will be encrypted
+        If the 'd' flag is passed the message passed will be decrypted
+
+    Note: Wheels cannot be rewired and rotations cannot be modified without recompiling the program.
+          <----- Message must contain all capital letters ------>
+
+Permuter:
+    Permuter(int permutation[], int length)
+        permutation - Array containing integers where the position i is mapped to permutation[i]
+        length       - The number of elements in the permutation
+
+    permute(std::string msg)
+        msg          - The string that the permuation will be applied to
+        Note:   Will apply to permutation to the message in block by the length of the permutation on initialization
+                Pads string with 'X' to get the message to be a multiple of the permutation length
+
+    unpermute(std::string msg)
+        msg          - The string that needs to be unscrambled
+        Note:   Applies the reverse of the permutation passed
+                Message must have a length that is a multiple of the permuation length
+
+Wheel:
+    Wheel(std::string &mapping, int rotate_period, char initial_view, std::map<char,int> &map, std::map<int, char> &reverse_map)
+        mapping         - Which characters map to which other characters, order is determined by the map passed in second to last argument
+        rotate_period   - How frequently the wheel rotates the character in the window
+        initial_view    - The initial character that would be viewable through the window
+        map             - A map of the valid characters "ABC...789" to integers 0,1,2,...,35,36
+        reverse_map     - The inverse of map just for convenience
+
+    char encode(char c)
+        c               - Encode a single character
+
+    char decode(char c)
+        c               - Decode a single character
+
+    std::string encode(std::string str)
+        str             - Encode a string one character at a time
+
+    std::string decode(std::string str)
+        str             - Decode a string one character at a time
+
+    void reset(char c)
+        c               - reset the wheel with the window showing the character
+
+Test plan:
+    Confirm that my program encodes and decodes messages exchanges on the discussion boards.
+    Test that messages that i encode get decoded properly.
+    Test with messages that don't contain a multiple of 10 characters.
+
+    I have been successful with the tests above.
+
+Bombe Approach:
+    This is still breakable by the Bombe approach as it is really just a simpler version of the Enigma machine.
+    The only difference is the plug board has been replaced with a permutation of length 10.
+    The wheels are fixed in order and the wiring is fixed so the number of initial positions is:
+    (26 choose 1)^3 * (10 choose 10) = 26^3*10! (3 wheel's initial positions and possible permutations)
+    The only new challenge with this scheme over the enigma is how to deal with the permutation being unknown.
+    This could be overcome by having another row of wheels that is checking over the permutations.
+
+    Using brute force on all combinations and that the bombe could check 17,576 positions in 20 minutes (wikipedia bombe)
+    26^3*10! * 20/17576 = 72,576,000 minutes = 50,400 days approx 5.75 years
+
+    This should be able to be improved upon if there is a known word that you are decoding because you can look for the a decoding that creates all the correct letters and figure out the permutation manually.
+    This would effectively remove the permutation bit and bring the time down to a reasonable amount.
+

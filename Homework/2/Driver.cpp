@@ -22,6 +22,8 @@ int usage(char *progname)
     std::cerr << "permutation   - list of integers from 0-9 appearing once ie. 3145926870 or 0123456789" <<std::endl;
     std::cerr << "window        - list of 3 characters representing the inital offset of the left middle and right wheel respectively" <<std::endl;
     std::cerr << "filename      - will read text to encrypt/decrypt from file, if none is specified then use stdin" <<std::endl;
+    std::cerr << "Note          - The message must contain all UPPERCASE letters" <<std::endl;
+    return -1;
 }
 
 int encode(int permutation[10], char windows[3], std::istream *input){
