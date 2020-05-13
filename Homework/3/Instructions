@@ -1,0 +1,10 @@
+Your third project is one where you are responsible for reverse engineering a malicious IoT device.
+You have the datasheet on the processor, a hypothetical machine called the S20, but that's all you have to go on.
+The attached document describes the instruction set and shows an example of the assembly language format and the machine code format.
+
+Your first step in the analysis is to write a disassembler for the machine.
+I recommend approaching the assignment in two phases.
+In the first phase, just directly disassemble all the words in the binary file.
+This will result in nop instructions being output for the three data items at the end.
+In the second phase trace the code execution starting at address 0, and disassemble only the basic blocks that are reachable by the code.
+Other words, should be labeled as data.
