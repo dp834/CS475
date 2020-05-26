@@ -46,23 +46,69 @@ class Instruction:
         if(self.type == "data"):
             self.args = "0"
         elif(self.type == "op"):
-            if(self.code not in [0x03, 0x04]):
+            # if ld
+            # print src, dest
+            if(self.code in [0x01]):
+                self.args = "{}, r{}".format(self.get_label_from_address(program, self.instr & 0x7FFF),
+                                            (self.instr >> 15) & 0x1F)
+            # if st
+            # print src, dest
+            elif(self.code in [0x02]):
                 self.args = "r{}, {}".format((self.instr >> 15) & 0x1F,
-                                            self.get_label_from_address(program, self.instr & 0x7FFF))
-            else:
+                                              self.get_label_from_address(program, self.instr & 0x7FFF))
+            # if br or bsr
+            # print label (register is ignored)
+            elif(self.code in [0x03, 0x04]):
                 self.args = "{}".format(self.get_label_from_address(program, self.instr & 0x7FFF))
+
+            # if bzr, bnz, brn, bnn
+            # print register, label
+            elif(self.code in [0x05,0x06,0x07, 0x08]):
+                self.args = "r{}, {}".format((self.instr >> 15) & 0x1F,
+                                              self.get_label_from_address(program, self.instr & 0x7FFF))
+            # Unkown print format
+            else:
+                self.args = "Unkown format"
 
         elif(self.type == "subop"):
 
-            if(self.code in [0x08, 0x09, 0x0A, 0x0B]):
-                self.args = "r{}, {}, r{}".format((self.instr >> 15) & 0x1F,
-                                                 (self.instr >> 10) & 0x1F,
-                                                 (self.instr >>  5) & 0x1F)
-
-            elif(self.code not in [0x00, 0x10, 0x1f]):
+            # if ldi
+            # rA = base
+            # rB = offset
+            # rC = dest
+            # print base, offset, dest
+            if(self.code in [0x01]):
+                self.args = "r{}, r{}, r{}".format((self.instr >>  5) & 0x1F,
+                                                   (self.instr >> 15) & 0x1F,
+                                                   (self.instr >> 10) & 0x1F)
+            # if sti
+            # rA = base
+            # rB = offset
+            # rC = src
+            # print src, base, offset
+            elif(self.code in [0x02]):
+                self.args = "r{}, r{}, r{}".format((self.instr >>  5) & 0x1F,
+                                                   (self.instr >> 15) & 0x1F,
+                                                   (self.instr >> 10) & 0x1F)
+            # if add, sub, and, or, xor
+            # print src, src, dest
+            elif(self.code in [0x03, 0x04, 0x05, 0x06, 0x07]):
                 self.args = "r{}, r{}, r{}".format((self.instr >> 15) & 0x1F,
-                                                 (self.instr >> 10) & 0x1F,
-                                                 (self.instr >>  5) & 0x1F)
+                                                   (self.instr >> 10) & 0x1F,
+                                                   (self.instr >>  5) & 0x1F)
+            # if shl, sal, shr, sar
+            # print src, shift count, dest
+            elif(self.code in [0x08, 0x09, 0x0A, 0x0B]):
+                self.args = "r{}, {:2}, r{}".format((self.instr >> 15) & 0x1F,
+                                                    (self.instr >> 10) & 0x1F,
+                                                    (self.instr >>  5) & 0x1F)
+            # if nop, rts, halt
+            # no args
+            elif(self.code in [0x00, 0x10, 0x1f]):
+                self.args = ""
+
+            else:
+                self.args = "Unkown format"
 
     def get_label_from_address(self, program, address):
         if(len(program) < address):
@@ -123,6 +169,7 @@ class Instruction:
             # Here we seem to be executing some modified data
             # Mark it but ignore?
             self.label = "Exec data"
+            self.args = "Executing field that has been written to"
             program[self.addr + 1].explore(program)
 
     def __str__(self):
