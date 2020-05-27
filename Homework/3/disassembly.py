@@ -44,7 +44,7 @@ class Instruction:
 
     def parse_args(self, program):
         if(self.type == "data"):
-            self.args = "0"
+            self.args = "{:<6x}".format(self.instr)
         elif(self.type == "op"):
             # if ld
             # print src, dest
