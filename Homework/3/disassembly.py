@@ -187,6 +187,7 @@ class Instruction:
 def breakdown_instruction(address, instr):
     code = (instr >> 4*5) & 0xF
     type = ""
+    dict = {}
     if(code == 0):
         code = (instr & 0x1F)
         if(code not in sub_opcode_table.keys()):
@@ -216,11 +217,13 @@ def read_by_instruction(data,type):
         readsize = 3 * 2
 
     instruction = data.read(readsize)
-    # TODO: What is end condition if reading binary
-    while(instruction != "\n"):
+    while(instruction and instruction != "\n"):
         if(type == "t"):
             # convert text to integer, stored in hex
             instruction = int(instruction,16)
+        if(type == "b"):
+            # convert bytes to integer
+            instruction = int.from_bytes(instruction, byteorder="big")
         yield instruction
         instruction = data.read(readsize)
 
@@ -272,6 +275,4 @@ if(__name__ == "__main__"):
 
     if(args.filename != "-"):
         file.close()
-
-
 
