@@ -1,0 +1,58 @@
+Running the program:
+
+python3 disassembly.py [-h] [-f file] {b,binary,t,text}
+or if python3 is in /usr/bin/python3
+./disassembly.py [-h] [-f file] {b,binary,t,text}
+
+Using the sample program
+./disassembly.py -f sample_program.bin b
+./disassembly.py -f sample_program.txt t
+
+usage: disassembly.py [-h] [-f file] {b,binary,t,text}
+
+	Description:
+		Disassembler for a made up architecture the s20
+
+	positional arguments:
+		{b,binary,t,text}  Is the input file is binary or text
+
+	optional arguments:
+		-h, --help         show this help message and exit
+		-f  file           File to read from, default is stdin
+
+Sample Files to test with:
+sample_program.bin - Run with b[inary] option
+sample_program.txt - Run with t[ext] option
+
+Note:
+	If file is a text file it is expected that all values are on one line with NO spaces.
+	See sample_program.txt for reference.
+	Input binaries and files are assumed to be valid machine code files
+		Has some multiple of 3 bytes
+		The program begins running at address 0x0000
+	To read from stdin for piping either omit the -f option or use '-' as the filename
+
+Design:
+Read all instructions and store them inside of the Instruction class for easy access to data.
+The instruction class keeps track of what type of data is being held, initially it assumes all data is an instruction.
+Begin "executing" from address 0x0000.
+For each instruction visited, mark that it has been visited and explore the new instructions.
+If an instruction has already been visited skip revisiting.
+This is essentially a depth first search for executable instructions.
+If an instruction reads/stores to/from an address mark it as data.
+If an instruction jumps to an address give the address a sequential label and explore from that node.
+If an instruction is to be explored, but is marked as Data mark it as executable data and do not attempt to explore from it as it can make arbitrary jumps to other parts of the code which may not be easily computable at disassemble time
+After finishing the search for explorable instructions see which instructions haven't been visited and mark them as data as they won't be executed and therefore are going to be used as data, likely in an array.
+Then print each instruction in order according to the format
+
+{address} {instruction} {label} {mnemonic} {arguments}
+
+Where:
+	Address is the address in the program
+	Instruction is the data stored at the address
+	Label is used to mark variables and labels
+	Mnemonic is the human readable command (ld, sub, brn, halt, etc)
+	Arguments is the human readable form of the arguments to be passed
+		If the instruction is executed then print the arguments in {src, [src], dest} format
+		If the instruction is data it prints the value of the data as a hex number
+
