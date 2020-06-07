@@ -130,7 +130,7 @@ private:
         size_t bytes_transferred)
     {
         if(error){
-            std::cout << "Error" << std::endl;
+            std::cerr << "Error" << std::endl;
             throw boost::system::system_error(error);
         }
         if(bytes_transferred < 0){
@@ -152,8 +152,6 @@ private:
             return;
         }
 
-        std::cout << "Client's encrypted msg: '" << tmp_msg_buf << "'" << std::endl;
-
         username = (char *) tmp_msg_buf;
 
         load_client_public_key();
@@ -167,15 +165,6 @@ private:
         unsigned char tmp[4096];
         tmp_msg_buf[len++] = '\0';
 
-        std::cout << len << " username and aes key: ";
-        std::cout.write((char*)tmp_msg_buf, len);
-        std::cout << std::endl;
-        if(tmp_msg_buf[5] == '\0'){
-            std::cout << "Username ENDS IN NULL" << std::endl;
-        }
-
-
-        std::cout << len << " : " << RSA_size(rsa_client_public) << std::endl;
         if((len = RSA_public_encrypt(len, tmp_msg_buf, tmp, rsa_client_public, RSA_PKCS1_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_msg_buf);
             std::cerr << "Error encrypting username and aes keys with client's public key" << std::endl;
@@ -183,8 +172,6 @@ private:
             stop();
             return;
         }
-
-        std::cout << len << " : " << RSA_size(rsa_server_private) << std::endl;
 
         if((len = RSA_private_encrypt(len, tmp, tmp_msg_buf, rsa_server_private, RSA_NO_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_msg_buf);
@@ -194,18 +181,10 @@ private:
             return;
         }
 
-        std::cout << "username and aes key encrypted: ";
-        std::cout.write((char*)tmp_msg_buf, len);
-        std::cout << std::endl;
-
         msg_buf = (char*) tmp_msg_buf;
 
         tmp_msg_buf[len++] = '\13';
         tmp_msg_buf[len++] = '\10';
-
-        std::cout << "aes key: ";
-        std::cout.write((char*)aes_key, sizeof(aes_key));
-        std::cout << std::endl;
 
         boost::asio::async_write(socket_, boost::asio::buffer(tmp_msg_buf, len), boost::asio::transfer_exactly(len),
             boost::bind(&TCP_Connection::open_encrypted_shell, shared_from_this(),
@@ -250,7 +229,6 @@ private:
             stop();
             return;
         }
-        std::cout << "Bytes read for iv: " << bytes_transferred << " : " << sizeof(aes_iv) <<std::endl;
         memset(aes_data_enc, 0, sizeof(aes_data_enc));
         boost::asio::async_read(socket_, boost::asio::buffer(aes_data_enc,sizeof(aes_data_enc)),
             boost::asio::transfer_exactly(sizeof(aes_data_enc)),
@@ -267,13 +245,8 @@ private:
             return;
         }
 
-        std::cout << "Bytes read for aes: " << bytes_transferred << " : " << sizeof(aes_data_enc) <<std::endl;
-        std::cout << "enc:";
-        std::cout.write((char*)aes_data_enc, 32);
-        std::cout << std::endl;
-        memset(aes_data_plain, 0, sizeof(aes_data_plain));
         AES_cbc_encrypt(aes_data_enc, aes_data_plain, sizeof(aes_data_plain), aes_dec, aes_iv, AES_DECRYPT);
-        std::cout << username << ": " << aes_data_plain << std::endl;
+        std::cout<< username << " sent: " << aes_data_plain << std::endl;
         RAND_bytes(aes_iv, sizeof(aes_iv));
 
         boost::asio::async_write(socket_, boost::asio::buffer(aes_iv,sizeof(aes_iv)),
@@ -291,7 +264,6 @@ private:
             return;
         }
 
-        std::cout << "Bytes written for iv : " << bytes_transferred << " : " << sizeof(aes_iv) <<std::endl;
         AES_cbc_encrypt(aes_data_plain, aes_data_enc, sizeof(aes_data_enc), aes_enc, aes_iv, AES_ENCRYPT);
 
         boost::asio::async_write(socket_, boost::asio::buffer(aes_data_enc, sizeof(aes_data_enc)), boost::asio::transfer_exactly(sizeof(aes_data_enc)),
@@ -307,7 +279,6 @@ private:
             stop();
             return;
         }
-        std::cout << "Bytes sent for enc: " << bytes_transferred << " : " << sizeof(aes_data_enc) <<std::endl;
         boost::asio::async_read(socket_, boost::asio::buffer(aes_iv, sizeof(aes_iv)),
             boost::asio::transfer_exactly(sizeof(aes_iv)),
             boost::bind(&TCP_Connection::read_aes_iv, shared_from_this(),

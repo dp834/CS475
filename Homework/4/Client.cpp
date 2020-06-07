@@ -106,15 +106,13 @@ int main(int argc, char* argv[]){
         }
 
 
-        std::cout << "Sent: '" << argv[2] << "'" << std::endl;
-        /* Marks end of first challenge for the server */
 
+        /* Marks end of first challenge for the server */
         tmp_buf[len] = '\13';
         tmp_buf[len+1] = '\10';
         len +=2;
         /* Inital challenge, send username encrypted with server's public key */
         len = boost::asio::write(socket, boost::asio::buffer(tmp_buf, len), boost::asio::transfer_exactly(len));
-        std::cout << "Sent: " << len << " bytes" << std::endl;
 
         /* Server should respond with '<username><aed-key><iv>'
          * decrypted with server's private key and encypted
@@ -124,11 +122,6 @@ int main(int argc, char* argv[]){
         len = boost::asio::read_until(socket, read_buf, MSG_END);
 
         store_recv_msg(to_recv, buf);
-        std::cout << buf.length() << " : " << len << std::endl;
-
-        std::cout << "username and aes key encrypted: ";
-        std::cout.write((char*)buf.c_str(), len);
-        std::cout << std::endl;
 
         if((len = RSA_public_decrypt(buf.length(),(unsigned char*)buf.c_str(), tmp_buf, rsa_server_public, RSA_NO_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_buf);
@@ -138,8 +131,6 @@ int main(int argc, char* argv[]){
             throw 20;
         }
 
-        std::cout << len << " : "  << buf.length() << " : " <<  RSA_size(rsa_server_public) << " : " << sizeof(tmp_buf) << std::endl;
-
         if((len = RSA_private_decrypt(len, tmp_buf, tmp, rsa_client_private, RSA_PKCS1_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_buf);
             std::cerr << "Error decrypting with client private: " << tmp_buf << std::endl;
@@ -147,10 +138,6 @@ int main(int argc, char* argv[]){
             socket.close();
             throw 20;
         }
-
-        std::cout << len << " username and aes key :";
-        std::cout.write((char*)tmp, len);
-        std::cout << std::endl;
 
         buf = (char *) tmp;
         if(strncmp(argv[2], (char*)tmp, strlen(argv[2])) != 0){
@@ -167,18 +154,12 @@ int main(int argc, char* argv[]){
         AES_set_encrypt_key(aes_key, sizeof(aes_key)*8, aes_enc);
         AES_set_decrypt_key(aes_key, sizeof(aes_key)*8, aes_dec);
 
-        std::cout << "aes key: ";
-        std::cout.write((char*)aes_key, sizeof(aes_key));
-        std::cout << std::endl;
-
         unsigned char aes_data_plain[1024];
         unsigned char aes_data_enc[1024];
         int i;
         RAND_bytes(aes_iv, sizeof(aes_iv));
         /* start with aes_iv, than spit out the aes encrypted data */
-        std::cout << "Sending iv" << std::endl;
         len = boost::asio::write(socket, boost::asio::buffer(aes_iv, len), boost::asio::transfer_exactly(sizeof(aes_iv)));
-        std::cout << "Sent iv" << std::endl;
         while(!std::cin.eof()){
             memset(aes_data_plain, 0, sizeof(aes_data_plain));
             memset(aes_data_enc, 0, sizeof(aes_data_enc));
@@ -187,6 +168,7 @@ int main(int argc, char* argv[]){
                     break;
                 }
                 if((aes_data_plain[i] = std::cin.get()) == '\n'){
+                    aes_data_plain[i] = '\0';
                     break;
                 }
             }
@@ -195,27 +177,19 @@ int main(int argc, char* argv[]){
             }
             aes_data_plain[i+1] = '\0';
 
-            std::cout << "Plain text (" << i << "): " << aes_data_plain << std::endl;
-
             AES_cbc_encrypt(aes_data_plain, aes_data_enc, sizeof(aes_data_plain), aes_enc, aes_iv, AES_ENCRYPT);
 
             len = boost::asio::write(socket, boost::asio::buffer(aes_data_enc, sizeof(aes_data_enc)), boost::asio::transfer_exactly(sizeof(aes_data_enc)));
 
-            std::cout << "Sent enc: " << len << " : " << sizeof(aes_data_enc) << std::endl;
-
             len = boost::asio::read(socket, boost::asio::buffer(aes_iv, sizeof(aes_iv)), boost::asio::transfer_exactly(sizeof(aes_iv)));
-            std::cout << "Read iv: " << len << " : " << sizeof(aes_iv) << std::endl;
             len = boost::asio::read(socket, boost::asio::buffer(aes_data_enc, sizeof(aes_data_enc)), boost::asio::transfer_exactly(sizeof(aes_data_enc)));
-            std::cout << "Read enc: " << len << " : " << sizeof(aes_data_enc) << std::endl;
             memset(aes_data_plain, 0 , sizeof(aes_data_plain));
             AES_cbc_encrypt(aes_data_enc, aes_data_plain, sizeof(aes_data_plain), aes_dec, aes_iv, AES_DECRYPT);
 
             std::cout << "Recieved: " <<  aes_data_plain << std::endl;
             RAND_bytes(aes_iv, sizeof(aes_iv));
             /* start with aes_iv, than spit out the aes encrypted data */
-            std::cout << "Sending iv" << std::endl;
             len = boost::asio::write(socket, boost::asio::buffer(aes_iv, len), boost::asio::transfer_exactly(sizeof(aes_iv)));
-            std::cout << "Sent iv" << std::endl;
         }
 
 
@@ -225,7 +199,7 @@ int main(int argc, char* argv[]){
     }catch (std::exception& e){
         std::cerr << e.what() << std::endl;
         store_recv_msg(to_recv, buf);
-        std::cout << "Error: '" << buf << "'" << std::endl;
+        std::cerr << "Error: '" << buf << "'" << std::endl;
     }
 
     return 0;
