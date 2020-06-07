@@ -1,28 +1,6 @@
 // Just used to hold the port and any other configurable information between the client and server
 #include "ASSIGNMENT4.hpp"
 
-// Symmetric
-#include <openssl/aes.h>
-// Public key
-#include <openssl/rsa.h>
-#include <openssl/bio.h>
-#include <openssl/pem.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-
-// Library for wrapping c functions in a c++ manner
-// Using it as an opportunity to learn how to as it's common in the industry for c++
-#include <boost/asio.hpp>
-#include <boost/bind.hpp>
-#include <boost/process/child.hpp>
-#include <boost/process.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-
-#include <string>
-#include <iostream>
-
 using boost::asio::ip::tcp;
 
 // TCP_Connection extends enable shared from this
@@ -35,34 +13,39 @@ class TCP_Connection
 public:
     typedef boost::shared_ptr<TCP_Connection> pointer;
 
+    /* This is how we will initialize new connections using shared ptr */
     static pointer create(boost::asio::io_service& io, std::string rsa_dir)
     {
         return pointer(new TCP_Connection(io, rsa_dir));
     }
 
+    /* getter for the socket */
     tcp::socket& socket()
     {
         return socket_;
     }
 
+    /* what to do when a new connection is made */
     void start()
     {
         /* wait for the client to send it's challenge message*/
         boost::asio::async_read_until(socket_, read_buf, MSG_END,
+            /* After getting a response we check the challenge */
             boost::bind(&TCP_Connection::challenge_client, shared_from_this(),
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
     }
 
 private:
+    /* constructor */
     TCP_Connection(boost::asio::io_service& io, std::string rsa_dir)
         : socket_(io),
-          to_send(&write_buf),
           to_recv(&read_buf),
           rsa_dir(rsa_dir)
     {
 
-        std::string fname = rsa_dir + "private.pem";
+        /* Read server's rsa_keys */
+        std::string fname = rsa_dir + "/private.pem";
         FILE *file = fopen(fname.c_str(), "rb");
         if(file){
             rsa_server_private = RSA_new();
@@ -72,7 +55,7 @@ private:
             stop();
         }
 
-        fname = rsa_dir + "public.pem";
+        fname = rsa_dir + "/public.pem";
         file = fopen(fname.c_str(), "rb");
         if(file){
             rsa_server_public = RSA_new();
@@ -81,11 +64,13 @@ private:
             std::cerr << "Error opening server public key" << std::endl;
             stop();
         }
-
-        memset(tmp_msg_buf, 0, sizeof(tmp_msg_buf));
     }
 
-    void load_client_public_key(){
+    /* Once we have a username we can grab their public key */
+    int load_client_public_key(){
+        /* Public keys are to be stored in the same folder
+         * as the server's keys with the format
+         * <username>.pem */
         std::string fname = rsa_dir + username + ".pem";
         FILE *file = fopen(fname.c_str(), "rb");
         if(file){
@@ -94,9 +79,12 @@ private:
         }else{
             std::cerr << "Error opening " << username << "'s public key" << std::endl;
             stop();
+            return -1;
         }
+        return 0;
     }
 
+    /* Creates an aes key and initializes the encrypt and decrypt context */
     void initialize_aes_parameters(){
         RAND_bytes(aes_key, sizeof(aes_key));
         aes_enc = new AES_KEY();
@@ -105,7 +93,7 @@ private:
         AES_set_decrypt_key(aes_key, sizeof(aes_key)*8, aes_dec);
     }
 
-    /* how we can terminate a session */
+    /* Cleanup things if needed */
     void stop()
     {
         if(username.size()){
@@ -113,19 +101,10 @@ private:
         }else{
             std::cout << "Closing connection with unconnected user" << std::endl;
         }
-
-        // check why these crash the program
-        /*if(rsa_server_private){
-            RSA_free(rsa_server_private);
-        }
-        if(rsa_server_public){
-            RSA_free(rsa_server_public);
-        }
-        if(rsa_client_public){
-            RSA_free(rsa_client_public);
-        }*/
+        socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
     }
 
+    /* Check the initial challenge from the client */
     void challenge_client(const boost::system::error_code& error,
         size_t bytes_transferred)
     {
@@ -133,17 +112,13 @@ private:
             std::cerr << "Error" << std::endl;
             throw boost::system::system_error(error);
         }
-        if(bytes_transferred < 0){
-            /* Find some error to throw*/
-            throw boost::system::system_error(error);
-        }
 
+        /* Move the data from the buffer to the string */
         store_recv_msg();
+
         /* client should have sent their challenge which contains
          * their username encrypted with RSA using the server's public key
-         * This is stored in client_msg
-         */
-
+         * So we must decrypt using our private RSA key */
         if(RSA_private_decrypt(msg_buf.length(), (unsigned char *)msg_buf.c_str(), tmp_msg_buf, rsa_server_private, RSA_PKCS1_PADDING) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_msg_buf);
             std::cerr << "Error decrypting username" << std::endl;
@@ -152,19 +127,28 @@ private:
             return;
         }
 
+        /* Grab the username and put it into a std::string */
         username = (char *) tmp_msg_buf;
 
-        load_client_public_key();
+        /* Now we know who we are looking for */
+        if(load_client_public_key()){
+            /* if there is an error loading their key
+             * we close */
+             return;
+        }
+        /* Valid user so create an AES key to share */
         initialize_aes_parameters();
-        msg_buf.resize(0);
-        msg_buf  = username;
+
         memcpy(&tmp_msg_buf[username.length()], aes_key, sizeof(aes_key));
 
         int len;
         len = username.length() + sizeof(aes_key);
-        unsigned char tmp[4096];
+        /* Make sure our messages are null terminated */
         tmp_msg_buf[len++] = '\0';
+        /* used as a buffer during RSA encryption */
+        unsigned char tmp[4096];
 
+        /* encrpyt the message using the client's public RSA key */
         if((len = RSA_public_encrypt(len, tmp_msg_buf, tmp, rsa_client_public, RSA_PKCS1_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_msg_buf);
             std::cerr << "Error encrypting username and aes keys with client's public key" << std::endl;
@@ -173,6 +157,7 @@ private:
             return;
         }
 
+        /* Encrypt the message using our private key */
         if((len = RSA_private_encrypt(len, tmp, tmp_msg_buf, rsa_server_private, RSA_NO_PADDING)) < 0){
             ERR_error_string(ERR_get_error(), (char *)tmp_msg_buf);
             std::cerr << "Error decrypting username and aes keys with server's private key" << std::endl;
@@ -181,17 +166,19 @@ private:
             return;
         }
 
-        msg_buf = (char*) tmp_msg_buf;
-
+        /* Mark the end of the message with the MSG_END string */
         tmp_msg_buf[len++] = '\13';
         tmp_msg_buf[len++] = '\10';
 
+        /* Send the encrypted username and shared key
+         * Then spawn a shell and pipe io around */
         boost::asio::async_write(socket_, boost::asio::buffer(tmp_msg_buf, len), boost::asio::transfer_exactly(len),
             boost::bind(&TCP_Connection::open_encrypted_shell, shared_from_this(),
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
     }
 
+    /* moving  recieved messages from the streambuf to a std::string */
     void store_recv_msg(){
         /* read everything from the buffer until the MSG_END sequence */
         msg_buf.resize(0);
@@ -207,6 +194,8 @@ private:
         }
     }
 
+    /* Didn't get around to implementing this part
+     * So right now it's just an echo server */
     void open_encrypted_shell(const boost::system::error_code& error,
         size_t bytes_transferred)
     {
@@ -214,15 +203,27 @@ private:
             throw boost::system::system_error(error);
             stop();
         }
-        if(bytes_transferred < 0){
-            /* Find some error to throw*/
-            throw boost::system::system_error(error);
-        }
 
+        /* this will just decrypt whatever is recieved
+         * Print it out and re-encrypt it with a new iv
+         * and send it back to the client */
+        /* The format of these transactions are
+         * <iv><encrypted-data> */
         echo_loop();
     }
 
-    /* aes_iv data should be in aes_iv buffer */
+    /* Makes the first call to read the iv from the client */
+    void echo_loop(){
+        memset(aes_iv, 0, sizeof(aes_iv));
+        boost::asio::async_read(socket_, boost::asio::buffer(aes_iv,sizeof(aes_iv)), boost::asio::transfer_exactly(sizeof(aes_iv)),
+            boost::bind(&TCP_Connection::read_aes_iv, shared_from_this(),
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+    }
+
+    /* Will report errors, if we wanted to do
+     * something to the recieved iv it would be here
+     * Here we just read the encrypted data */
     void read_aes_iv(const boost::system::error_code& error, size_t bytes_transferred){
         if(error){
             std::cerr << error.message() << std::endl;
@@ -237,7 +238,10 @@ private:
                     boost::asio::placeholders::bytes_transferred));
     }
 
-    /* aes_data_enc should be in aes_data_enc */
+    /* Will report errors
+     * Decrypt the encrypted text
+     * Print what was recieved from the user
+     * then generate new iv for our message to the client */
     void read_aes_enc(const boost::system::error_code& error, size_t bytes_transferred){
         if(error){
             std::cerr << error.message() << std::endl;
@@ -245,8 +249,11 @@ private:
             return;
         }
 
+        /* decrypt the data */
         AES_cbc_encrypt(aes_data_enc, aes_data_plain, sizeof(aes_data_plain), aes_dec, aes_iv, AES_DECRYPT);
         std::cout<< username << " sent: " << aes_data_plain << std::endl;
+
+        /* New iv for our message to the client */
         RAND_bytes(aes_iv, sizeof(aes_iv));
 
         boost::asio::async_write(socket_, boost::asio::buffer(aes_iv,sizeof(aes_iv)),
@@ -256,7 +263,9 @@ private:
                     boost::asio::placeholders::bytes_transferred));
     }
 
-    /* aes_iv should have been written */
+    /* Will report errors
+     * Encrypt the data we are going to send
+     * and send the data */
     void write_aes_iv(const boost::system::error_code& error, size_t bytes_transferred){
         if(error){
             std::cerr << error.message() << std::endl;
@@ -272,13 +281,15 @@ private:
                     boost::asio::placeholders::bytes_transferred));
     }
 
-    /* aes_data_enc should have been written */
+    /* Will report errors 
+     * Wait for the client to send a new message to echo back */
     void write_aes_enc(const boost::system::error_code& error, size_t bytes_transferred){
         if(error){
             std::cerr << error.message() << std::endl;
             stop();
             return;
         }
+
         boost::asio::async_read(socket_, boost::asio::buffer(aes_iv, sizeof(aes_iv)),
             boost::asio::transfer_exactly(sizeof(aes_iv)),
             boost::bind(&TCP_Connection::read_aes_iv, shared_from_this(),
@@ -287,37 +298,32 @@ private:
     }
 
 
-    void echo_loop(){
-        memset(aes_iv, 0, sizeof(aes_iv));
-        boost::asio::async_read(socket_, boost::asio::buffer(aes_iv,sizeof(aes_iv)), boost::asio::transfer_exactly(sizeof(aes_iv)),
-            boost::bind(&TCP_Connection::read_aes_iv, shared_from_this(),
-                boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
-    }
 
     tcp::socket socket_;
-    std::ostream to_send;
     std::istream to_recv;
     boost::asio::streambuf read_buf;
-    boost::asio::streambuf write_buf;
     std::string msg_buf;
     std::string username;
     std::string rsa_dir;
 
+    /* RSA encryption data */
     RSA *rsa_server_private;
     RSA *rsa_server_public;
     RSA *rsa_client_public;
+    unsigned char tmp_msg_buf[256 + sizeof(MSG_END)];
+
+    /* AES encryption data */
     unsigned char aes_key[256/8];
     unsigned char aes_iv[AES_BLOCK_SIZE];
     unsigned char aes_data_plain[1024];
     unsigned char aes_data_enc[1024];
     AES_KEY *aes_enc, *aes_dec;
-    unsigned char tmp_msg_buf[256 + sizeof(MSG_END)];
 };
 
 class TCP_Server
 {
 public:
+    /* constructor */
     TCP_Server(boost::asio::io_service& io, std::string& rsa_dir)
         : acceptor_(io, tcp::endpoint(tcp::v4(), PORT_INT)),
           rsa_dir(rsa_dir)
@@ -326,6 +332,10 @@ public:
     }
 
 private:
+    /* Wait for new connections
+     * when a new connection is made
+     * pass socket to the other class to
+     * handle communication */
     void start_accept()
     {
         // create a new connection
@@ -339,6 +349,7 @@ private:
 
     }
 
+    /* On connection accept we pass it to the other class */
     void handle_accept(TCP_Connection::pointer new_connection,
         const boost::system::error_code& error)
     {
@@ -353,11 +364,17 @@ private:
     std::string rsa_dir;
 };
 
-int main(void){
+int main(int argc, char *argv[]){
+    if(argc != 2){
+        std::cout << "Usage: " << argv[0] << " <rsa_keys-dir>" << std::endl;
+        std::cout << "This is a simple echo server that uses an encrypted AES connection." << std::endl;
+        std::cout << "The key is passed via public key RSA" << std::endl;
+        return -1;
+    }
     try{
         // required for all io operations through boost
         boost::asio::io_service io;
-        std::string rsa_dir("../server/");
+        std::string rsa_dir(argv[1]);
         TCP_Server server(io, rsa_dir);
 
         io.run();
