@@ -1,0 +1,101 @@
+Building the system:
+
+mkdir build
+cd build
+cmake ..
+cmake --build .
+
+Parts of the system:
+    server      - Handles authentication and echo's back to client
+    client      - Initiates session with server
+
+NOTE: RSA keys are to be generated using these commands
+    openssl genrsa -out private.pem 2048
+    openssl rsa -in private.pem -outform PEM -pubout -out public.pem
+
+Server:
+    Usage:
+        ./server <rsa-keys-dir>
+            rsa-keys-dir    - Path to a directory containing the rsa keys used for authentication.
+                              The server's private key must be 'private.pem'
+                              The server's public key must be 'public.pem'
+                              Client's public keys must be '<username>.pem'
+
+            Note: The server can support an arbitrary number of clients at once
+
+Client:
+    Usage:
+        ./client <host> <username> <rsa-keys-dir>
+            host        - Name of server (probably localhost for testing)
+            username    - The user you are attempting to authenticate as
+            rsa-keys-dir    - Path to a directory containing the rsa keys used for authentication.
+                              The user's private key must be 'private.pem'
+                              The user's public key must be 'public.pem'
+                              Server's public key must be 'server.pem'
+
+Code Quality Note:
+I realize that the quality of the code is quite poor.
+This is due to never having used the two libraries that I ended up using, boost and openssl.
+I plan on coming back to this project in the future and cleaning everything up and implementing changing the server from an echo server to spawning the shell as you mentioned might be interesting.
+
+Client server communication:
+
+Initially when transferring keys and getting the shared token messages are of the form
+    '<data>MSG_END'
+Where MSG_END = "\13\10"
+Once the shared key is on the client and the server's ends everything is sent using fixed length messages.
+First the initialization vector (size is AES_BLOCK_SIZE) is sent, then the encrypted data is sent I'm using 1024 byte messages.
+
+Currently the data flow is as follows:
+Server is waiting for a connection to be made
+Client connects to server
+Server waits for the challenge message from the client
+Client sends it's username encrypted with the server's public key then waits for a response.
+Server receives challenge and decrypts the message using the server's private key.
+Server looks for username
+    If found creates a shared aes key and encrypts the username followed by the shared key.
+    The message is encrypted with the client's public key and the server's private key.
+    The encrypted message is sent and the server waits for a message from the client
+Client receives the response and decrypts the message to extract the shared aes key.
+    Client generates a random initialization vector and shares sends it to the server.
+    Client reads from stdin and encrypts the data with the shared key and iv that was sent.
+    Client sends the encrypted data to the server.
+Server receives initialization vector, stores it and waits for the encrypted data.
+    Server receives the encrypted data, decrypts it and prints the message and who it was from
+    Server then generates a new initialization vector and sends it to the client
+    Server then encrypts the message and sends it to the client and waits for a new iv to be sent from the client.
+Client receives initialization vector, stores it and waits for the encrypted data.
+    Client receives the encrypted data, decrypts it and prints the message and who it was from
+    Client then repeats the iv generation/sending and reading from stdin until eof then closes the socket.
+
+
+How this fares against attacks:
+Replay attacks - For the attacker to mimic the server they would have to determine the public key of the client and the private key of the server. Assuming no access to the server then it would be pretty safe as the only other way to determine the key would be to break RSA which comes down to the discrete log problem.
+Same goes for trying to mimic the client.
+Man in the middle - The attacker would need the server's private key to mimic the server and same for the client.
+    If the man has access to the server or the client they could place false rsa keys to impersonate, but assuming you have
+    a secure method of exchanging public keys the first time it should be safe.
+
+Overall I think this is a relatively safe method especially since it's not a listed standard anywhere.
+The already good security is only enhanced by the obscurity of the system's design.
+
+
+Tests:
+
+Keys are stored in the 'client' and 'server' directories.
+
+Given the current setup of the folders running out of the build folder
+./server ../server/
+./client localhost dmp394 ../client/
+
+Typing a message in the client will cause the message to be sent to the server and back.
+The client's original message, the server's decrypted message and the client's decrypted message all should match.
+This just shows that messages are being sent across, but doesn't show that encryption works in any capacity.
+
+To make sure encryption worked I printed the buffers as they were sent and received and made sure that they were not the plaintext, and that the server's encryption was different from the clients due to different initialization vectors.
+
+Connecting with a user that doesn't have a key just closes the connection.
+
+If a message is longer than the size of a buffer it gets sent in chunks by the size of the buffer.
+
+If a decryption is not successful due to a key mismatch then the server will just close a connection with the client.
